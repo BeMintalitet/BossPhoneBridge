@@ -1,0 +1,18 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Boss Phone Bridge" android:textSize="28sp" android:textStyle="bold"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Bruger telefonens SIM til SMS og opkald." android:layout_marginBottom="20dp"/>
+    <EditText android:id="@+id/phone" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="Telefonnummer, fx +45 12 34 56 78" android:inputType="phone"/>
+    <EditText android:id="@+id/message" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="SMS-besked" android:minLines="4" android:gravity="top"/>
+    <Button android:id="@+id/sendSms" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Send SMS"/>
+    <Button android:id="@+id/call" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Ring op"/>
+    <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Klar" android:paddingTop="18dp"/>
+</LinearLayout>
