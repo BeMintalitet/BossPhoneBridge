@@ -5,6 +5,7 @@ import { URL } from "node:url";
 const PORT = Number(process.env.PORT || 8787);
 const ADMIN_TOKEN = process.env.BOSS_ADMIN_TOKEN || "";
 const DEVICE_TOKEN = process.env.BOSS_DEVICE_TOKEN || "";
+const MCP_PROTOCOL_VERSION = "2024-11-05";
 
 const queue = [];
 let lastSeen = null;
@@ -16,6 +17,10 @@ function json(res, status, body) {
     "cache-control": "no-store"
   });
   res.end(JSON.stringify(body));
+}
+
+function mcpError(id, code, message, status = 200) {
+  return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
 function bearer(req) {
@@ -57,6 +62,133 @@ function addAction(type, payload) {
   return action;
 }
 
+function toolDefinitions() {
+  return [
+    {
+      name: "device_status",
+      description: "Get current device status including online state and the latest sensor/telephony payload.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    },
+    {
+      name: "pending_actions",
+      description: "List the currently pending queued actions awaiting Android approval.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    },
+    {
+      name: "send_sms",
+      description: "Queue an SMS to be sent after confirmation by the Android device.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient phone number in E.164-style format." },
+          message: { type: "string", description: "SMS text content." }
+        },
+        required: ["to", "message"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: "start_call",
+      description: "Queue a call request that must be confirmed by the Android device before connecting.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Destination phone number." }
+        },
+        required: ["to"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: "open_app",
+      description: "Queue an app launch request that must be confirmed by the Android device before execution.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          package_name: { type: "string", description: "Android package identifier to open." }
+        },
+        required: ["package_name"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: "open_chatgpt",
+      description: "Queue a ChatGPT app launch request that must be confirmed by the Android device before execution.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  ];
+}
+
+function deviceStatusPayload() {
+  return {
+    online: !!lastSeen && Date.now() - new Date(lastSeen).getTime() < 120000,
+    last_seen: lastSeen,
+    device: lastDeviceStatus
+  };
+}
+
+function handleToolCall(name, args) {
+  switch (name) {
+    case "device_status":
+      return deviceStatusPayload();
+
+    case "pending_actions":
+      return {
+        actions: queue.filter(x => x.status === "pending")
+      };
+
+    case "send_sms": {
+      const b = args || {};
+      if (!validPhone(b.to) || typeof b.message !== "string" || !b.message.trim() || b.message.length > 5000) {
+        throw new Error("invalid_request");
+      }
+      return {
+        action: addAction("send_sms", { to: b.to, message: b.message })
+      };
+    }
+
+    case "start_call": {
+      const b = args || {};
+      if (!validPhone(b.to)) {
+        throw new Error("invalid_request");
+      }
+      return {
+        action: addAction("start_call", { to: b.to })
+      };
+    }
+
+    case "open_app": {
+      const b = args || {};
+      if (typeof b.package_name !== "string" || !/^[A-Za-z0-9._]+$/.test(b.package_name)) {
+        throw new Error("invalid_request");
+      }
+      return {
+        action: addAction("open_app", { package_name: b.package_name })
+      };
+    }
+
+    case "open_chatgpt":
+      return {
+        action: addAction("open_chatgpt", { package_name: "com.openai.chatgpt" })
+      };
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, `http://${req.headers.host}`);
@@ -65,6 +197,126 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok: true,
         service: "Boss Device Connector"
+      });
+    }
+
+    if (req.method === "GET" && u.pathname === "/mcp") {
+      return json(res, 200, {
+        ok: true,
+        protocol: "mcp",
+        endpoint: "/mcp"
+      });
+    }
+
+    if (u.pathname === "/mcp") {
+      if (req.method !== "POST") {
+        return json(res, 405, {
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32000, message: "Method not allowed" }
+        });
+      }
+
+      const auth = bearer(req);
+      if (!safeEqual(auth, ADMIN_TOKEN)) {
+        return json(res, 401, {
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32001, message: "Unauthorized" }
+        });
+      }
+
+      let requestBody = {};
+      try {
+        requestBody = await body(req);
+      } catch {
+        return json(res, 400, {
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32700, message: "Parse error" }
+        });
+      }
+
+      const id = requestBody.id ?? null;
+      const method = requestBody.method;
+
+      if (!method) {
+        return json(res, 400, {
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32600, message: "Invalid Request" }
+        });
+      }
+
+      if (method === "initialize") {
+        return json(res, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: {
+              tools: { listChanged: true }
+            },
+            serverInfo: {
+              name: "boss-device-connector",
+              version: "1.0.0"
+            }
+          }
+        });
+      }
+
+      if (method === "notifications/initialized") {
+        return json(res, 202, { jsonrpc: "2.0", id, result: {} });
+      }
+
+      if (method === "tools/list") {
+        return json(res, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: { tools: toolDefinitions() }
+        });
+      }
+
+      if (method === "tools/call") {
+        try {
+          const toolName = requestBody.params?.name;
+          const toolArgs = requestBody.params?.arguments || {};
+          const result = handleToolCall(toolName, toolArgs);
+          return json(res, 200, {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [{
+                type: "text",
+                text: JSON.stringify(result, null, 2)
+              }],
+              structuredContent: result
+            }
+          });
+        } catch (err) {
+          return json(res, 200, {
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: err.message || "Tool execution failed"
+            }
+          });
+        }
+      }
+
+      if (method === "ping") {
+        return json(res, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: { ok: true }
+        });
+      }
+
+      return json(res, 200, {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: `Method not found: ${method}` }
       });
     }
 
@@ -108,12 +360,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && u.pathname === "/v1/device/status") {
-      return json(res, 200, {
-        online: !!lastSeen &&
-          Date.now() - new Date(lastSeen).getTime() < 120000,
-        last_seen: lastSeen,
-        device: lastDeviceStatus
-      });
+      return json(res, 200, deviceStatusPayload());
     }
 
     if (req.method === "GET" && u.pathname === "/v1/actions") {
