@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
                     if (actionId == null) {
                         status.text = if (resultCode == RESULT_OK) "SMS afleveret til mobilnettet" else "SMS kunne ikke sendes (kode $resultCode)"
                     } else {
-                        handleDeviceSmsResult(actionId, intent.getIntExtra(EXTRA_SMS_PART, 0))
+                        handleDeviceSmsResult(actionId, intent.getIntExtra(EXTRA_SMS_PART, 0), resultCode)
                     }
                 }
                 deliveredAction -> status.text = if (resultCode == RESULT_OK) "SMS leveret til modtager" else "Leveringskvittering ikke bekræftet"
@@ -327,7 +327,7 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun handleDeviceSmsResult(actionId: String, part: Int) {
+    private fun handleDeviceSmsResult(actionId: String, part: Int, resultCode: Int) {
         val progress = smsProgress[actionId] ?: return
         if (resultCode != RESULT_OK) {
             smsProgress.remove(actionId)
