@@ -1,0 +1,110 @@
+openapi: 3.1.0
+info:
+  title: Boss Device Connector
+  version: 0.1.0
+  description: Secure bridge to a paired Boss Assistant Android device.
+
+servers:
+  - url: https://REPLACE-WITH-YOUR-CONNECTOR-HOST
+
+paths:
+  /v1/device/status:
+    get:
+      operationId: device_status
+      summary: Get paired device status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Device status
+
+  /v1/actions:
+    get:
+      operationId: pending_actions
+      summary: View recent device actions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Actions
+
+  /v1/send_sms:
+    post:
+      operationId: send_sms
+      summary: Request an SMS from the paired phone
+      description: The phone must confirm the request before sending.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, message]
+              properties:
+                to:
+                  type: string
+                message:
+                  type: string
+                  maxLength: 5000
+      responses:
+        "202":
+          description: Action queued
+
+  /v1/start_call:
+    post:
+      operationId: start_call
+      summary: Request a call from the paired phone
+      description: The phone must confirm the request before calling.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to:
+                  type: string
+      responses:
+        "202":
+          description: Action queued
+
+  /v1/open_app:
+    post:
+      operationId: open_app
+      summary: Request opening an Android app
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [package_name]
+              properties:
+                package_name:
+                  type: string
+      responses:
+        "202":
+          description: Action queued
+
+  /v1/open_chatgpt:
+    post:
+      operationId: open_chatgpt
+      summary: Request opening ChatGPT on the paired phone
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Action queued
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
