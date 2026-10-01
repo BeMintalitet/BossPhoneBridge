@@ -1,5 +1,8 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true">
+<LinearLayout
+    android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:padding="24dp">
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="Boss Phone Bridge" android:textSize="28sp" android:textStyle="bold"/>
@@ -13,6 +16,15 @@
         android:text="Send SMS"/>
     <Button android:id="@+id/call" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Ring op"/>
+    <TextView android:id="@+id/connectorTitle" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="BOSS CONNECTOR" android:textSize="22sp" android:layout_marginTop="20dp"/>
+    <EditText android:id="@+id/deviceToken" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="BOSS_DEVICE_TOKEN" android:inputType="textPassword" android:singleLine="true"/>
+    <Button android:id="@+id/saveDeviceToken" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Gem device token"/>
+    <Button android:id="@+id/fetchActions" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Hent ChatGPT-kommandoer"/>
     <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Klar" android:paddingTop="18dp"/>
 </LinearLayout>
+</ScrollView>

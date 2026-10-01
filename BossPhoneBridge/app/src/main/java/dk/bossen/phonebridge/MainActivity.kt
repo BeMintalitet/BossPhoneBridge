@@ -37,6 +37,28 @@ class MainActivity : AppCompatActivity() {
         status = findViewById(R.id.status)
         findViewById<Button>(R.id.sendSms).setOnClickListener { confirmSms() }
         findViewById<Button>(R.id.call).setOnClickListener { confirmCall() }
+        val prefs = getSharedPreferences("boss_phone_bridge", MODE_PRIVATE)
+        val deviceToken = findViewById<EditText>(R.id.deviceToken)
+        deviceToken.setText(prefs.getString("device_token", ""))
+        findViewById<Button>(R.id.saveDeviceToken).setOnClickListener {
+            prefs.edit().putString("device_token", deviceToken.text.toString().trim()).apply()
+            status.text = "Device-token gemt lokalt."
+        }
+        findViewById<Button>(R.id.fetchActions).setOnClickListener {
+            val token = prefs.getString("device_token", "").orEmpty()
+            if (token.isBlank()) {
+                status.text = "Indtast først BOSS_DEVICE_TOKEN."
+            } else {
+                Thread {
+                    try {
+                        val result = BossConnector.getActions(token)
+                        runOnUiThread { status.text = "Connector svar:\n$result" }
+                    } catch (e: Exception) {
+                        runOnUiThread { status.text = "Connector-fejl: ${e.message}" }
+                    }
+                }.start()
+            }
+        }
         ContextCompat.registerReceiver(this, receiver, IntentFilter().apply { addAction(sentAction); addAction(deliveredAction) }, ContextCompat.RECEIVER_NOT_EXPORTED)
         importIntent(intent)
     }
